@@ -1,8 +1,44 @@
 #!/usr/bin/python
 
 import socket
+import argparse
 
 # TODO: UDP support
+
+# constants
+bufsize = 4096
+
+def run_tcp_server(local_host, local_port, remote_host, remote_port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.bind((local_host, local_port))
+        server.listen(1)
+        print('Listen on {0:s}:{1:d}'.format(local_host, local_port))
+        while True:
+            print('Waiting for connection')
+            conn, addr = server.accept()
+            print('Accepted connection from', addr)
+            with conn:
+                try:
+                    handle_tcp_connection(conn, remote_host, remote_port)
+                except OSError as msg:
+                    print('Error occured while handling connection: {0:s}'.format(msg))
+
+def handle_tcp_connection(conn, remote_host, remote_port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote:
+        remote.connect((remote_host, remote_port))
+        while True:
+            data = conn.recv(bufsize)
+            if not data:
+                break
+            remote.sendall(data)
+            data = remote.recv(bufsize)
+            if not data:
+                break
+            conn.sendall(data)
+
+def fuzz(data):
+    # do nothing so far
+    return data
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--local_host',  help='local host name', default='localhost')
@@ -49,18 +85,3 @@ if args.protocol == 'tcp':
     run_tcp_server(args.local_host, args.local_port, args.remote_host, args.remote_port)
 elif args.protocol == 'udp':
     raise Exception('UDP is not supported yet')
-
-def run_tcp_server(local_host, local_port, remote_host, remote_port):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((local_host, local_port))
-        s.listen(1)
-        conn, addr = s.accept()
-        with conn:
-            print('Connected by', addr)
-            while True:
-                data = conn.recv(4096)
-                raise Exception('Not implemented')
-
-def fuzz(data):
-    # do nothing so far
-    return data
