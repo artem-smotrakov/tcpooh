@@ -8,7 +8,7 @@ import argparse
 # constants
 bufsize = 4096
 
-def run_tcp_server(local_host, local_port, remote_host, remote_port, timeout):
+def run_tcp_server(local_host, local_port, remote_host, remote_port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         server.bind((local_host, local_port))
         server.listen(1)
@@ -18,15 +18,13 @@ def run_tcp_server(local_host, local_port, remote_host, remote_port, timeout):
             conn, addr = server.accept()
             print('Accepted connection from', addr)
             with conn:
-                conn.settimeout(timeout)
                 try:
-                    handle_tcp_connection(conn, remote_host, remote_port, timeout)
+                    handle_tcp_connection(conn, remote_host, remote_port)
                 except OSError as msg:
                     print('Error occured while handling connection: {0:s}'.format(msg))
 
-def handle_tcp_connection(conn, remote_host, remote_port, timeout):
+def handle_tcp_connection(conn, remote_host, remote_port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote:
-        remote.settimeout(timeout)
         remote.connect((remote_host, remote_port))
         while True:
             data = conn.recv(bufsize)
@@ -53,7 +51,6 @@ parser.add_argument('--ratio',
                     help='fuzzing ratio range, it can be a number, or an interval "start:end"',
                     default='0.01:0.05')
 parser.add_argument('--protocol', help='TCP or UDP', choices=['tcp', 'udp'], default='tcp')
-parser.add_argument('--timeout', help='Connection timeout', type=int, default=3)
 
 args = parser.parse_args()
 
