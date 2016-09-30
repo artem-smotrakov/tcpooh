@@ -10,7 +10,6 @@ bufsize = 4096
 
 def run_tcp_server(local_host, local_port, remote_host, remote_port, timeout):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind((local_host, local_port))
         server.listen(1)
         print('Listen on {0:s}:{1:d}'.format(local_host, local_port))
