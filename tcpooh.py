@@ -5,6 +5,8 @@ import argparse
 import textwrap
 
 # TODO: UDP support
+# TODO: add Config class
+# TODO: implement fuzzing (two directions)
 
 # global variables
 bufsize = 4096
