@@ -65,24 +65,41 @@ def handle_tcp_connection(conn, remote_host, remote_port, timeout):
         remote.connect((remote_host, remote_port))
         while True:
             print_with_prefix('connection', 'receive data from client')
-            data = conn.recv(bufsize)
-            if not data:
-                print_with_prefix('connection', 'no data received from client, closing')
-                break
-            print_with_prefix('connection', 'received {0:d} bytes from client'.format(len(data)))
-            # TODO: call fuzzer with client data
-            print_with_prefix('connection', 'send data to server')
-            remote.sendall(data)
-            print_with_prefix('connection', 'sent {0:d} bytes to server'.format(len(data)))
+            received = False
+            try:
+                data = conn.recv(bufsize)
+                if not data:
+                    print_with_prefix('connection', 'no data received from client, closing')
+                    break
+                else:
+                    received = True
+            except OSError as msg:
+                print_with_prefix('connection', 'error occured while receiving data from client: {0}'.format(msg))
+
+            if received:
+                print_with_prefix('connection', 'received {0:d} bytes from client'.format(len(data)))
+                # TODO: call fuzzer with client data
+                print_with_prefix('connection', 'send data to server')
+                remote.sendall(data)
+                print_with_prefix('connection', 'sent {0:d} bytes to server'.format(len(data)))
+
             print_with_prefix('connection', 'receive data from server')
-            data = remote.recv(bufsize)
-            if not data:
-                print_with_prefix('connection', 'no data received from server, closing')
-                break
-            print_with_prefix('connection', 'received {0:d} bytes from server'.format(len(data)))
-            # TODO: call fuzzer with server data
-            print_with_prefix('connection', 'sent {0:d} bytes to client'.format(len(data)))
-            conn.sendall(data)
+            received = False
+            try:
+                data = remote.recv(bufsize)
+                if not data:
+                    print_with_prefix('connection', 'no data received from server, closing')
+                    break
+                else:
+                    received = True
+            except OSError as msg:
+                print_with_prefix('connection', 'error occured while receiving data from server: {0}'.format(msg))
+
+            if received:
+                print_with_prefix('connection', 'received {0:d} bytes from server'.format(len(data)))
+                # TODO: call fuzzer with server data
+                print_with_prefix('connection', 'sent {0:d} bytes to client'.format(len(data)))
+                conn.sendall(data)
 
     print_with_prefix('connection', 'closed')
 
@@ -101,7 +118,7 @@ parser.add_argument('--ratio',
                     help='fuzzing ratio range, it can be a number, or an interval "start:end"',
                     default='0.01:0.05')
 parser.add_argument('--protocol', help='TCP or UDP', choices=['tcp', 'udp'], default='tcp')
-parser.add_argument('--timeout', help='Connection timeout', type=int, default=60)
+parser.add_argument('--timeout', help='connection timeout', type=int, default=3)
 parser.add_argument('--verbose', help='more logs', action='store_true', default=False)
 
 args = parser.parse_args()
