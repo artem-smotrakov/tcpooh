@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+import random
+
 # contains fuzzer configuration, parameters can be accessed as attributes
 class Config:
 
@@ -70,3 +72,56 @@ def print_with_indent(prefix, first_message, other_messages):
             initial_indent=indent, subsequent_indent=indent, width=70)
         for message in other_messages:
             print(wrapper.fill(message))
+
+class DumbByteArrayFuzzer:
+
+    def __init__(self, config, ignored_bytes = ()):
+
+        self.start_test = config.start_test
+        self.min_ratio = config.min_ratio
+        self.max_ratio = config.max_ratio
+        self.seed = config.seed
+        self.ignored_bytes = ignored_bytes
+        self.reset()
+
+    def set_test(self, test):
+        self.test = test
+
+    def reset(self):
+        self.test = self.start_test
+        self.random = random.Random()
+        self.random.seed(self.seed)
+        self.random_n = random.Random()
+        self.random_position = random.Random()
+        self.random_byte = random.Random()
+
+    def next(self, data):
+        fuzzed = bytearray(data)
+        min_bytes = int(float(self.min_ratio) * int(len(data)));
+        max_bytes = int(float(self.max_ratio) * int(len(data)));
+
+        seed = self.random.random() * self.test
+
+        if min_bytes == max_bytes:
+            n = min_bytes
+        else:
+            self.random_n.seed(seed)
+            n = self.random_n.randrange(min_bytes, max_bytes)
+
+        self.random_position.seed(seed)
+        self.random_byte.seed(seed)
+
+        i = 0
+        while (i < n):
+            pos = self.random_position.randint(0, len(fuzzed) - 1)
+            if self.isignored(fuzzed[pos]):
+                continue
+            b = self.random_byte.randint(0, 255)
+            fuzzed[pos] = b
+            i += 1
+
+        self.test += 1
+        return fuzzed
+
+    def isignored(self, symbol):
+        return symbol in self.ignored_bytes

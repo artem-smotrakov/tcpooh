@@ -6,20 +6,19 @@ import textwrap
 import helper
 
 # TODO: UDP support
-# TODO: add Config class
-# TODO: implement fuzzing (two directions)
 
-# This is a simple TCP/TLS server which just wraps socket's methods
 class Server:
 
     bufsize = 4096
 
-    def __init__(self, local_host, local_port, remote_host, remote_port, timeout):
-        self.local_host = local_host
-        self.local_port = local_port
-        self.remote_host = remote_host
-        self.remote_port = remote_port
-        self.timeout = timeout
+    def __init__(self, config, client_fuzzer = None, server_fuzzer = None):
+        self.local_host = config.local_host
+        self.local_port = config.local_port
+        self.remote_host = config.remote_host
+        self.remote_port = config.remote_port
+        self.timeout = config.timeout
+        self.client_fuzzer = client_fuzzer
+        self.server_fuzzer = server_fuzzer
 
     def start(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
@@ -57,8 +56,12 @@ class Server:
 
                 if received:
                     helper.print_with_prefix('connection', 'received {0:d} bytes from client'.format(len(data)))
-                    # TODO: call fuzzer with client data
-                    helper.print_with_prefix('connection', 'send data to server')
+                    if self.client_fuzzer:
+                        data = self.client_fuzzer.next(data)
+                        helper.print_with_prefix('connection', 'send fuzzed data to server')
+                    else:
+                        helper.print_with_prefix('connection', 'send data to server')
+
                     remote.sendall(data)
                     helper.print_with_prefix('connection', 'sent {0:d} bytes to server'.format(len(data)))
 
@@ -76,9 +79,14 @@ class Server:
 
                 if received:
                     helper.print_with_prefix('connection', 'received {0:d} bytes from server'.format(len(data)))
-                    # TODO: call fuzzer with server data
-                    helper.print_with_prefix('connection', 'sent {0:d} bytes to client'.format(len(data)))
+                    if self.server_fuzzer:
+                        data = self.server_fuzzer.next(data)
+                        helper.print_with_prefix('connection', 'send fuzzed data to client')
+                    else:
+                        helper.print_with_prefix('connection', 'send data to client')
+
                     conn.sendall(data)
+                    helper.print_with_prefix('connection', 'sent {0:d} bytes to client'.format(len(data)))
 
         helper.print_with_prefix('connection', 'closed')
 
@@ -92,9 +100,13 @@ parser.add_argument('--test',
 parser.add_argument('--ratio',
                     help='fuzzing ratio range, it can be a number, or an interval "start:end"',
                     default='0.01:0.05')
+parser.add_argument('--seed', help='seed for pseudo-random generator', type=int,
+                    default=1)
 parser.add_argument('--protocol', help='TCP or UDP', choices=['tcp', 'udp'], default='tcp')
 parser.add_argument('--timeout', help='connection timeout', type=int, default=3)
 parser.add_argument('--verbose', help='more logs', action='store_true', default=False)
+parser.add_argument('--client_fuzzer', help='fuzz data from client to server', action='store_true', default=True)
+parser.add_argument('--server_fuzzer', help='fuzz data from server to client', action='store_true', default=False)
 
 # create configuration
 config = helper.Config()
@@ -103,10 +115,16 @@ config.readargs(parser.parse_args())
 # set global configuration
 helper.config = config
 
+client_fuzzer = None
+if config.client_fuzzer:
+    client_fuzzer = helper.DumbByteArrayFuzzer(config)
+
+server_fuzzer = None
+if config.server_fuzzer:
+    server_fuzzer = helper.DumbByteArrayFuzzer(config)
+
 if config.protocol == 'tcp':
-    server = Server(config.local_host, config.local_port,
-                    config.remote_host, config.remote_port,
-                    config.timeout)
+    server = Server(config, client_fuzzer, server_fuzzer)
     server.start()
 elif config.protocol == 'udp':
     raise Exception('UDP is not supported yet')
