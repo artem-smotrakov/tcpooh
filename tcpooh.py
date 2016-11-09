@@ -2,6 +2,7 @@
 
 import argparse
 import core
+import sys
 
 # TODO: UDP support
 
@@ -20,7 +21,7 @@ parser.add_argument('--seed', help='seed for pseudo-random generator', type=int,
 parser.add_argument('--protocol', help='TCP or UDP', choices=['tcp', 'udp'], default='tcp')
 parser.add_argument('--timeout', help='connection timeout', type=int, default=3)
 parser.add_argument('--verbose', help='more logs', action='store_true', default=False)
-parser.add_argument('--client_fuzzer', help='fuzz data from client to server', action='store_true', default=True)
+parser.add_argument('--client_fuzzer', help='fuzz data from client to server', action='store_true', default=False)
 parser.add_argument('--server_fuzzer', help='fuzz data from server to client', action='store_true', default=False)
 
 # create configuration
@@ -37,6 +38,10 @@ if config.client_fuzzer:
 server_fuzzer = None
 if config.server_fuzzer:
     server_fuzzer = core.DumbByteArrayFuzzer(config)
+
+if server_fuzzer == None and client_fuzzer == None:
+    print('Please specify fuzzer mode with --client_fuzzer and --server_fuzzer options')
+    sys.exit(1)
 
 if config.protocol == 'tcp':
     server = core.Server(config, client_fuzzer, server_fuzzer)
