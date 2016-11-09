@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import argparse
-import helper
+import core
 
 # TODO: UDP support
 
@@ -24,22 +24,22 @@ parser.add_argument('--client_fuzzer', help='fuzz data from client to server', a
 parser.add_argument('--server_fuzzer', help='fuzz data from server to client', action='store_true', default=False)
 
 # create configuration
-config = helper.Config()
+config = core.Config()
 config.readargs(parser.parse_args())
 
 # set global configuration
-helper.config = config
+core.config = config
 
 client_fuzzer = None
 if config.client_fuzzer:
-    client_fuzzer = helper.DumbByteArrayFuzzer(config)
+    client_fuzzer = core.DumbByteArrayFuzzer(config)
 
 server_fuzzer = None
 if config.server_fuzzer:
-    server_fuzzer = helper.DumbByteArrayFuzzer(config)
+    server_fuzzer = core.DumbByteArrayFuzzer(config)
 
 if config.protocol == 'tcp':
-    server = helper.Server(config, client_fuzzer, server_fuzzer)
+    server = core.Server(config, client_fuzzer, server_fuzzer)
     server.start()
 elif config.protocol == 'udp':
     raise Exception('UDP is not supported yet')
