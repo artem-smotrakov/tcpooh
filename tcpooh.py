@@ -5,6 +5,9 @@ import core
 import sys
 
 # TODO: UDP support
+# TODO: add an option to specify an interval of data to fuzz
+# TODO: add an option to specify a log file of an application which is being fuzzed
+#       (for example, the fuzzer can detect ASan reports, and save test number and fuzzed data)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--local_host',  help='local host name', default='localhost')
