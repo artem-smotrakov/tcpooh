@@ -4,6 +4,43 @@ import random
 import socket
 import textwrap
 
+# prints out a message if verbose output is enabled
+def verbose(*args):
+    if config.verbose:
+        if len(args) == 0:
+            return
+        elif len(args) == 1:
+            print(args[0])
+        elif len(args) == 2:
+            verbose_with_prefix(args[0], args[1])
+        else:
+            verbose_with_indent(args[0], args[1], args[2:])
+
+# print out a message with specified prefix if verbose output is enabled
+def verbose_with_prefix(prefix, message):
+    if config.verbose:
+        print_with_prefix(prefix, message)
+
+# print out a message with specified prefix and indent if verbose output is enabled
+def verbose_with_indent(prefix, first_message, other_messages):
+    if config.verbose:
+        print_with_indent(prefix, first_message, other_messages)
+
+# print out a message with prefix
+def print_with_prefix(prefix, message):
+    print('[{0:s}] {1}'.format(prefix, message))
+
+# print out a message with specified prefix
+def print_with_indent(prefix, first_message, other_messages):
+    formatted_prefix = '[{0:s}] '.format(prefix)
+    print('{0:s}{1}'.format(formatted_prefix, first_message))
+    if len(other_messages) > 0:
+        indent = ' ' * len(formatted_prefix)
+        wrapper = textwrap.TextWrapper(
+            initial_indent=indent, subsequent_indent=indent, width=70)
+        for message in other_messages:
+            print(wrapper.fill(message))
+
 # contains fuzzer configuration, parameters can be accessed as attributes
 class Config:
 
@@ -11,6 +48,7 @@ class Config:
     def readargs(self, args):
         self.args = vars(args)
 
+        # parse test range
         if args.test:
             parts = args.test.split(':')
             if len(parts) == 1:
@@ -28,6 +66,7 @@ class Config:
             self.args['start_test'] = 0
             self.args['end_test'] = float('inf')
 
+        # parse mutation ratio
         parts = args.ratio.split(':')
         if len(parts) == 1:
             self.args['min_ratio'] = float(parts[0])
@@ -41,44 +80,10 @@ class Config:
     def __getattr__(self, name):
         return self.args[name]
 
-config = Config()
-
-def verbose(*args):
-    if config.verbose:
-        if len(args) == 0:
-            return
-        elif len(args) == 1:
-            print(args[0])
-        elif len(args) == 2:
-            verbose_with_prefix(args[0], args[1])
-        else:
-            verbose_with_indent(args[0], args[1], args[2:])
-
-def verbose_with_prefix(prefix, message):
-    if config.verbose:
-        print_with_prefix(prefix, message)
-
-def verbose_with_indent(prefix, first_message, other_messages):
-    if config.verbose:
-        print_with_indent(prefix, first_message, other_messages)
-
-def print_with_prefix(prefix, message):
-    print('[{0:s}] {1}'.format(prefix, message))
-
-def print_with_indent(prefix, first_message, other_messages):
-    formatted_prefix = '[{0:s}] '.format(prefix)
-    print('{0:s}{1}'.format(formatted_prefix, first_message))
-    if len(other_messages) > 0:
-        indent = ' ' * len(formatted_prefix)
-        wrapper = textwrap.TextWrapper(
-            initial_indent=indent, subsequent_indent=indent, width=70)
-        for message in other_messages:
-            print(wrapper.fill(message))
-
+# dumb fuzzer for a byte array
 class DumbByteArrayFuzzer:
 
     def __init__(self, config, ignored_bytes = ()):
-
         self.start_test = config.start_test
         self.min_ratio = config.min_ratio
         self.max_ratio = config.max_ratio
@@ -128,6 +133,8 @@ class DumbByteArrayFuzzer:
     def isignored(self, symbol):
         return symbol in self.ignored_bytes
 
+# TCP server which redirect incoming connections to remote server
+# It calls a fuzzer to fuzz data from client and server
 class Server:
 
     bufsize = 4096
@@ -210,3 +217,7 @@ class Server:
                     print_with_prefix('connection', 'sent {0:d} bytes to client'.format(len(data)))
 
         print_with_prefix('connection', 'closed')
+
+
+# global configuration
+config = Config()
