@@ -8,6 +8,8 @@ import sys
 # TODO: add an option to specify an interval of data to fuzz
 # TODO: add an option to specify a log file of an application which is being fuzzed
 #       (for example, the fuzzer can detect ASan reports, and save test number and fuzzed data)
+# TODO: dump client/server data to separate files for last connection
+# TODO: load dumped data from file to be able to reproduce test without running original client/server
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--local_host',  help='local host name', default='localhost')
