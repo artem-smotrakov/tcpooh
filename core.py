@@ -87,7 +87,6 @@ class DumbByteArrayFuzzer:
         self.start_test = config.start_test
         self.min_ratio = config.min_ratio
         self.max_ratio = config.max_ratio
-        self.seed = config.seed
         self.ignored_bytes = ignored_bytes
         self.reset()
 
@@ -96,18 +95,20 @@ class DumbByteArrayFuzzer:
 
     def reset(self):
         self.test = self.start_test
-        self.random = random.Random()
-        self.random.seed(self.seed)
+        self.random_seed = random.Random()
         self.random_n = random.Random()
         self.random_position = random.Random()
         self.random_byte = random.Random()
 
     def next(self, data):
+        print_with_prefix('fuzzer', 'test {0:d}'.format(self.test))
+
         fuzzed = bytearray(data)
         min_bytes = int(float(self.min_ratio) * int(len(data)));
         max_bytes = int(float(self.max_ratio) * int(len(data)));
 
-        seed = self.random.random() * self.test
+        self.random_seed.seed(self.test)
+        seed = self.random_seed.random()
 
         if min_bytes == max_bytes:
             n = min_bytes

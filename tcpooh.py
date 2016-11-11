@@ -19,8 +19,6 @@ parser.add_argument('--test',
 parser.add_argument('--ratio',
                     help='fuzzing ratio range, it can be a number, or an interval "start:end"',
                     default='0.01:0.05')
-parser.add_argument('--seed', help='seed for pseudo-random generator', type=int,
-                    default=1)
 parser.add_argument('--protocol', help='TCP or UDP', choices=['tcp', 'udp'], default='tcp')
 parser.add_argument('--timeout', help='connection timeout', type=int, default=3)
 parser.add_argument('--verbose', help='more logs', action='store_true', default=False)
