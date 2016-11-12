@@ -4,28 +4,6 @@ import random
 import socket
 import textwrap
 
-# prints out a message if verbose output is enabled
-def verbose(*args):
-    if config.verbose:
-        if len(args) == 0:
-            return
-        elif len(args) == 1:
-            print(args[0])
-        elif len(args) == 2:
-            verbose_with_prefix(args[0], args[1])
-        else:
-            verbose_with_indent(args[0], args[1], args[2:])
-
-# print out a message with specified prefix if verbose output is enabled
-def verbose_with_prefix(prefix, message):
-    if config.verbose:
-        print_with_prefix(prefix, message)
-
-# print out a message with specified prefix and indent if verbose output is enabled
-def verbose_with_indent(prefix, first_message, other_messages):
-    if config.verbose:
-        print_with_indent(prefix, first_message, other_messages)
-
 # print out a message with prefix
 def print_with_prefix(prefix, message):
     print('[{0:s}] {1}'.format(prefix, message))

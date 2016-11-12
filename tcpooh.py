@@ -23,7 +23,6 @@ parser.add_argument('--ratio',
                     default='0.01:0.05')
 parser.add_argument('--protocol', help='TCP or UDP', choices=['tcp', 'udp'], default='tcp')
 parser.add_argument('--timeout', help='connection timeout', type=int, default=3)
-parser.add_argument('--verbose', help='more logs', action='store_true', default=False)
 parser.add_argument('--fuzzer', help='fuzzer mode (client or server), data can be stored to a file specified by --datafile option',
                     choices=['client', 'server'])
 parser.add_argument('--dumper', help='dumper mode (client or server), read data from file specified by --datafile option',
