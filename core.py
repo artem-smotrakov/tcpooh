@@ -48,6 +48,12 @@ class Config:
     def readargs(self, args):
         self.args = vars(args)
 
+        if not args.fuzzer and not args.dumper:
+            raise Exception('Please specify --fuzzer or --dumper')
+
+        if args.fuzzer and args.dumper:
+            raise Exception('Only --fuzzer or --dumper should be specified')
+
         # parse test range
         if args.test:
             parts = args.test.split(':')
@@ -77,16 +83,29 @@ class Config:
         else:
             raise Exception('Could not parse --ratio value, too many colons')
 
+        self.fuzzer = DumbByteArrayFuzzer(self.args['start_test'],
+                                          self.args['min_ratio'],
+                                          self.args['max_ratio'])
+
     def __getattr__(self, name):
         return self.args[name]
+
+    def is_client_fuzzer(self):
+        return self.args['fuzzer'] == 'client'
+
+    def is_server_fuzzer(self):
+        return self.args['fuzzer'] == 'server'
+
+    def fuzz(self, data):
+        return self.fuzzer.next(data)
 
 # dumb fuzzer for a byte array
 class DumbByteArrayFuzzer:
 
-    def __init__(self, config, ignored_bytes = ()):
-        self.start_test = config.start_test
-        self.min_ratio = config.min_ratio
-        self.max_ratio = config.max_ratio
+    def __init__(self, start_test, min_ratio, max_ratio, ignored_bytes = ()):
+        self.start_test = start_test
+        self.min_ratio = min_ratio
+        self.max_ratio = max_ratio
         self.ignored_bytes = ignored_bytes
         self.reset()
 
@@ -140,14 +159,13 @@ class Server:
 
     bufsize = 4096
 
-    def __init__(self, config, client_fuzzer = None, server_fuzzer = None):
+    def __init__(self, config):
         self.local_host = config.local_host
         self.local_port = config.local_port
         self.remote_host = config.remote_host
         self.remote_port = config.remote_port
         self.timeout = config.timeout
-        self.client_fuzzer = client_fuzzer
-        self.server_fuzzer = server_fuzzer
+        self.config = config
 
     def start(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
@@ -185,12 +203,10 @@ class Server:
 
                 if received:
                     print_with_prefix('connection', 'received {0:d} bytes from client'.format(len(data)))
-                    if self.client_fuzzer:
-                        data = self.client_fuzzer.next(data)
-                        print_with_prefix('connection', 'send fuzzed data to server')
-                    else:
-                        print_with_prefix('connection', 'send data to server')
+                    if self.config.is_client_fuzzer():
+                        data = self.config.fuzz(data)
 
+                    print_with_prefix('connection', 'send data to server')
                     remote.sendall(data)
                     print_with_prefix('connection', 'sent {0:d} bytes to server'.format(len(data)))
 
@@ -208,12 +224,10 @@ class Server:
 
                 if received:
                     print_with_prefix('connection', 'received {0:d} bytes from server'.format(len(data)))
-                    if self.server_fuzzer:
-                        data = self.server_fuzzer.next(data)
-                        print_with_prefix('connection', 'send fuzzed data to client')
-                    else:
-                        print_with_prefix('connection', 'send data to client')
+                    if self.config.is_server_fuzzer():
+                        data = self.config.fuzz(data)
 
+                    print_with_prefix('connection', 'send data to client')
                     conn.sendall(data)
                     print_with_prefix('connection', 'sent {0:d} bytes to client'.format(len(data)))
 

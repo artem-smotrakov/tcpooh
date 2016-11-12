@@ -24,8 +24,11 @@ parser.add_argument('--ratio',
 parser.add_argument('--protocol', help='TCP or UDP', choices=['tcp', 'udp'], default='tcp')
 parser.add_argument('--timeout', help='connection timeout', type=int, default=3)
 parser.add_argument('--verbose', help='more logs', action='store_true', default=False)
-parser.add_argument('--client_fuzzer', help='fuzz data from client to server', action='store_true', default=False)
-parser.add_argument('--server_fuzzer', help='fuzz data from server to client', action='store_true', default=False)
+parser.add_argument('--fuzzer', help='fuzzer mode (client or server), data can be stored to a file specified by --datafile option',
+                    choices=['client', 'server'])
+parser.add_argument('--dumper', help='dumper mode (client or server), read data from file specified by --datafile option',
+                    choices=['client', 'server'])
+parser.add_argument('--datafile', help='file for storing and loading data')
 
 # create configuration
 config = core.Config()
@@ -34,20 +37,8 @@ config.readargs(parser.parse_args())
 # set global configuration
 core.config = config
 
-client_fuzzer = None
-if config.client_fuzzer:
-    client_fuzzer = core.DumbByteArrayFuzzer(config)
-
-server_fuzzer = None
-if config.server_fuzzer:
-    server_fuzzer = core.DumbByteArrayFuzzer(config)
-
-if server_fuzzer == None and client_fuzzer == None:
-    print('Please specify fuzzer mode with --client_fuzzer and --server_fuzzer options')
-    sys.exit(1)
-
 if config.protocol == 'tcp':
-    server = core.Server(config, client_fuzzer, server_fuzzer)
+    server = core.Server(config)
     server.start()
 elif config.protocol == 'udp':
     raise Exception('UDP is not supported yet')
