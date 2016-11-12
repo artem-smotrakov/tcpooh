@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import binascii
 import random
 import socket
 import textwrap
@@ -23,13 +24,19 @@ class DataDumper:
 
     def __init__(self, filename):
         self.filename = filename
+        self.clear()
 
     def dump(self, data):
-        print_with_prefix('dumper', 'dump data to {0:s}'.format(self.filename))
-        # do nothing
+        self.buffer.extend(binascii.b2a_hex(data))
+        self.buffer.extend(b'\n')
 
-    def clean(self):
-        print_with_prefix('dumper', 'clean {0:s}'.format(self.filename))
+    def clear(self):
+        self.buffer = bytearray()
+
+    def close(self):
+        print_with_prefix('dumper', 'dump data to {0:s}'.format(self.filename))
+        with open(self.filename, 'wb') as file:
+            file.write(self.buffer)
 
 # contains fuzzer configuration, parameters can be accessed as attributes
 class Task:
@@ -101,6 +108,14 @@ class Task:
             raise Exception('--dumper mode is not implemented yet')
         else:
             raise Exception('This should be not reachable')
+
+    def clear_dumper(self):
+        if self.dumper:
+            self.dumper.clear()
+
+    def finalize(self):
+        if self.dumper:
+            self.dumper.close()
 
 # dumb fuzzer for a byte array
 class DumbByteArrayFuzzer:
@@ -191,6 +206,7 @@ class Server:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote:
             remote.settimeout(self.timeout)
             remote.connect((self.remote_host, self.remote_port))
+            self.task.clear_dumper()
             while True:
                 print_with_prefix('connection', 'receive data from client')
                 received = False

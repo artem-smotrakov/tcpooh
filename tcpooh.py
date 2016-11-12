@@ -31,10 +31,13 @@ parser.add_argument('--datafile', help='file for storing and loading data')
 
 # create task
 task = core.Task()
-task.readargs(parser.parse_args())
+try:
+    task.readargs(parser.parse_args())
 
-if task.protocol == 'tcp':
-    server = core.Server(task)
-    server.start()
-elif task.protocol == 'udp':
-    raise Exception('UDP is not supported yet')
+    if task.protocol == 'tcp':
+        server = core.Server(task)
+        server.start()
+    elif task.protocol == 'udp':
+        raise Exception('UDP is not supported yet')
+finally:
+    task.finalize()
