@@ -32,7 +32,7 @@ class DataDumper:
         print_with_prefix('dumper', 'clean {0:s}'.format(self.filename))
 
 # contains fuzzer configuration, parameters can be accessed as attributes
-class Config:
+class Task:
 
     # read arguments returned by argparse.ArgumentParser
     def readargs(self, args):
@@ -162,13 +162,13 @@ class Server:
 
     bufsize = 4096
 
-    def __init__(self, config):
-        self.local_host = config.local_host
-        self.local_port = config.local_port
-        self.remote_host = config.remote_host
-        self.remote_port = config.remote_port
-        self.timeout = config.timeout
-        self.config = config
+    def __init__(self, task):
+        self.local_host = task.local_host
+        self.local_port = task.local_port
+        self.remote_host = task.remote_host
+        self.remote_port = task.remote_port
+        self.timeout = task.timeout
+        self.task = task
 
     def start(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
@@ -206,8 +206,8 @@ class Server:
 
                 if received:
                     print_with_prefix('connection', 'received {0:d} bytes from client'.format(len(data)))
-                    if self.config.is_client_fuzzer():
-                        data = self.config.fuzz(data)
+                    if self.task.is_client_fuzzer():
+                        data = self.task.fuzz(data)
 
                     print_with_prefix('connection', 'send data to server')
                     remote.sendall(data)
@@ -227,8 +227,8 @@ class Server:
 
                 if received:
                     print_with_prefix('connection', 'received {0:d} bytes from server'.format(len(data)))
-                    if self.config.is_server_fuzzer():
-                        data = self.config.fuzz(data)
+                    if self.task.is_server_fuzzer():
+                        data = self.task.fuzz(data)
 
                     print_with_prefix('connection', 'send data to client')
                     conn.sendall(data)
@@ -236,6 +236,3 @@ class Server:
 
         print_with_prefix('connection', 'closed')
 
-
-# global configuration
-config = Config()

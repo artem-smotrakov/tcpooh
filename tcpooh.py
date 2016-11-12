@@ -29,15 +29,12 @@ parser.add_argument('--dumper', help='dumper mode (client or server), read data 
                     choices=['client', 'server'])
 parser.add_argument('--datafile', help='file for storing and loading data')
 
-# create configuration
-config = core.Config()
-config.readargs(parser.parse_args())
+# create task
+task = core.Task()
+task.readargs(parser.parse_args())
 
-# set global configuration
-core.config = config
-
-if config.protocol == 'tcp':
-    server = core.Server(config)
+if task.protocol == 'tcp':
+    server = core.Server(task)
     server.start()
-elif config.protocol == 'udp':
+elif task.protocol == 'udp':
     raise Exception('UDP is not supported yet')
