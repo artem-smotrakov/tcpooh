@@ -41,6 +41,18 @@ def print_with_indent(prefix, first_message, other_messages):
         for message in other_messages:
             print(wrapper.fill(message))
 
+class DataDumper:
+
+    def __init__(self, filename):
+        self.filename = filename
+
+    def dump(self, data):
+        print_with_prefix('dumper', 'dump data to {0:s}'.format(self.filename))
+        # do nothing
+
+    def clean(self):
+        print_with_prefix('dumper', 'clean {0:s}'.format(self.filename))
+
 # contains fuzzer configuration, parameters can be accessed as attributes
 class Config:
 
@@ -87,6 +99,11 @@ class Config:
                                           self.args['min_ratio'],
                                           self.args['max_ratio'])
 
+        if self.args['datafile']:
+            self.dumper = DataDumper(self.args['datafile'])
+        else:
+            self.dumper = None
+
     def __getattr__(self, name):
         return self.args[name]
 
@@ -97,7 +114,15 @@ class Config:
         return self.args['fuzzer'] == 'server'
 
     def fuzz(self, data):
-        return self.fuzzer.next(data)
+        if self.args['fuzzer']:
+            fuzzed = self.fuzzer.next(data)
+            if self.dumper:
+                self.dumper.dump(data)
+            return fuzzed
+        elif self.args['dumper']:
+            raise Exception('--dumper mode is not implemented yet')
+        else:
+            raise Exception('This should be not reachable')
 
 # dumb fuzzer for a byte array
 class DumbByteArrayFuzzer:
