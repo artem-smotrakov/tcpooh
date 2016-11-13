@@ -139,7 +139,10 @@ class Task:
         return self.args[name]
 
     def run(self):
-        self.server.start()
+        try:
+            self.server.start()
+        finally:
+            self.finalize()
 
     def fuzz_client(self):
         return self.args['mode'] == 'fuzz_client'

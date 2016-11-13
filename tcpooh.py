@@ -28,8 +28,5 @@ parser.add_argument('--data', help='file for storing and loading data')
 
 # create task
 task = core.Task()
-try:
-    task.readargs(parser.parse_args())
-    task.run()
-finally:
-    task.finalize()
+task.readargs(parser.parse_args())
+task.run()
