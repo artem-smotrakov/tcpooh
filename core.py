@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import binascii
+import codecs
 import random
 import socket
 import textwrap
@@ -16,7 +17,7 @@ def print_with_indent(prefix, first_message, other_messages):
     if len(other_messages) > 0:
         indent = ' ' * len(formatted_prefix)
         wrapper = textwrap.TextWrapper(
-            initial_indent=indent, subsequent_indent=indent, width=70)
+            initial_indent=indent, subsequent_indent=indent, width=80)
         for message in other_messages:
             print(wrapper.fill(message))
 
@@ -27,16 +28,51 @@ class DataDumper:
         self.clear()
 
     def dump(self, data):
-        self.buffer.extend(binascii.b2a_hex(data))
-        self.buffer.extend(b'\n')
+        self.data.append(data)
 
     def clear(self):
-        self.buffer = bytearray()
+        self.data = []
 
     def close(self):
         print_with_prefix('dumper', 'dump data to {0:s}'.format(self.filename))
-        with open(self.filename, 'wb') as file:
-            file.write(self.buffer)
+        with open(self.filename, 'w') as file:
+            for msg in self.data:
+                hexx = binascii.hexlify(msg).decode('utf-8')
+                print_with_prefix('dumper', 'store: {0}'.format(hexx))
+                file.write(hexx)
+                file.write('\n')
+
+# technically it's not a fuzzer, but it pretends to be a fuzzer
+# it reads data from a file, and return it if fuzz() method is called
+# it expectes data in a file to be stored by DataDumper
+class BoringFuzzer:
+
+    def __init__(self, filename):
+        self.data = []
+        with open(filename, 'r') as file:
+            for line in file.readlines():
+                line = line.rstrip()
+                print_with_indent('boring fuzzer', 'read string:', [ line ])
+                self.data.append(binascii.unhexlify(line))
+        if len(self.data) == 0:
+            raise Exception('No data loaded from {0:s}'.format(filename))
+        print_with_prefix('boring fuzzer', 'loaded {0:d} messages'.format(len(self.data)))
+        self.reset()
+
+    def fuzz(self):
+        print_with_prefix('boring fuzzer', 'test {0:d}'.format(self.test))
+
+        fuzzed = self.data[self.test]
+
+        if self.test == len(self.data) - 1:
+            self.test = 0
+        else:
+            self.test += 1
+
+        return fuzzed
+
+    def reset(self):
+        self.test = 0
 
 # contains fuzzer configuration, parameters can be accessed as attributes
 class Task:
@@ -44,12 +80,6 @@ class Task:
     # read arguments returned by argparse.ArgumentParser
     def readargs(self, args):
         self.args = vars(args)
-
-        if not args.fuzzer and not args.dumper:
-            raise Exception('Please specify --fuzzer or --dumper')
-
-        if args.fuzzer and args.dumper:
-            raise Exception('Only --fuzzer or --dumper should be specified')
 
         # parse test range
         if args.test:
@@ -80,34 +110,35 @@ class Task:
         else:
             raise Exception('Could not parse --ratio value, too many colons')
 
-        self.fuzzer = DumbByteArrayFuzzer(self.args['start_test'],
-                                          self.args['min_ratio'],
-                                          self.args['max_ratio'])
+        if self.args['mode'] == 'fuzz_client' or self.args['mode'] == 'fuzz_server':
+            self.fuzzer = DumbByteArrayFuzzer(self.args['start_test'],
+                                                self.args['min_ratio'],
+                                                self.args['max_ratio'])
+            if self.args['data']:
+                self.dumper = DataDumper(self.args['data'])
 
-        if self.args['datafile']:
-            self.dumper = DataDumper(self.args['datafile'])
+                if self.args['protocol'] == 'tcp':
+                    self.server = Server(self)
+                else:
+                    raise Exception('Unsupported protocol: {0:s}'.format(self.args['protocol']))
+        elif self.args['mode'] == 'client_data':
+            raise Exception('Unsupported mode: {0:s}'.format(self.args['mode']))
+        elif self.args['mode'] == 'server_data':
+            self.server = BoringServer(self)
         else:
-            self.dumper = None
+            raise Exception('Unexpected mode {0:s}'.format(self.args['mode']))
 
     def __getattr__(self, name):
         return self.args[name]
 
-    def is_client_fuzzer(self):
-        return self.args['fuzzer'] == 'client'
+    def run(self):
+        self.server.start()
 
-    def is_server_fuzzer(self):
-        return self.args['fuzzer'] == 'server'
+    def fuzz_client(self):
+        return self.args['mode'] == 'fuzz_client'
 
-    def fuzz(self, data):
-        if self.args['fuzzer']:
-            fuzzed = self.fuzzer.next(data)
-            if self.dumper:
-                self.dumper.dump(data)
-            return fuzzed
-        elif self.args['dumper']:
-            raise Exception('--dumper mode is not implemented yet')
-        else:
-            raise Exception('This should be not reachable')
+    def fuzz_server(self):
+        return self.args['mode'] == 'fuzz_server'
 
     def clear_dumper(self):
         if self.dumper:
@@ -137,7 +168,7 @@ class DumbByteArrayFuzzer:
         self.random_position = random.Random()
         self.random_byte = random.Random()
 
-    def next(self, data):
+    def fuzz(self, data):
         print_with_prefix('fuzzer', 'test {0:d}'.format(self.test))
 
         fuzzed = bytearray(data)
@@ -222,8 +253,10 @@ class Server:
 
                 if received:
                     print_with_prefix('connection', 'received {0:d} bytes from client'.format(len(data)))
-                    if self.task.is_client_fuzzer():
-                        data = self.task.fuzz(data)
+                    if self.task.fuzzer:
+                        data = self.task.fuzzer.fuzz(data)
+                        if self.task.dumper:
+                            self.task.dumper.dump(data)
 
                     print_with_prefix('connection', 'send data to server')
                     remote.sendall(data)
@@ -243,8 +276,10 @@ class Server:
 
                 if received:
                     print_with_prefix('connection', 'received {0:d} bytes from server'.format(len(data)))
-                    if self.task.is_server_fuzzer():
-                        data = self.task.fuzz(data)
+                    if self.task.fuzz_client():
+                        data = self.task.fuzzer.fuzz(data)
+                        if self.task.dumper:
+                            self.task.dumper.dump(data)
 
                     print_with_prefix('connection', 'send data to client')
                     conn.sendall(data)
@@ -252,3 +287,57 @@ class Server:
 
         print_with_prefix('connection', 'closed')
 
+# this TCP server reads data from a file, and returns it to a client
+class BoringServer:
+
+    bufsize = 4096
+
+    def __init__(self, task):
+        self.local_host = task.local_host
+        self.local_port = task.local_port
+        self.timeout = task.timeout
+        self.task = task
+        self.fuzzer = BoringFuzzer(task.data)
+
+    def start(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server.bind((self.local_host, self.local_port))
+            server.listen(1)
+            print_with_prefix('boring server', 'listening on {0:s}:{1:d}'.format(self.local_host, self.local_port))
+            self.fuzzer.reset()
+            while True:
+                print_with_prefix('server', 'waiting for connection')
+                conn, addr = server.accept()
+                print_with_prefix('boring server', 'accepted connection from: {0}'.format(addr))
+                with conn:
+                    conn.settimeout(self.timeout)
+                    try:
+                        self.handle_tcp_connection(conn)
+                    except OSError as msg:
+                        print_with_prefix('boring server', 'error occured while handling connection: {0}'.format(msg))
+
+    def handle_tcp_connection(self, conn):
+        while True:
+            print_with_prefix('boring connection', 'receive data from client')
+            received = False
+            try:
+                data = conn.recv(self.bufsize)
+                if not data:
+                    print_with_prefix('boring connection', 'no data received from client, closing')
+                    break
+                else:
+                    received = True
+            except OSError as msg:
+                print_with_prefix('boring connection', 'error occured while receiving data from client: {0}'.format(msg))
+
+            if received:
+                print_with_prefix('boring connection', 'received {0:d} bytes from client'.format(len(data)))
+                print_with_prefix('boring connection', 'ignore client data')
+
+                data = self.fuzzer.fuzz()
+                print_with_prefix('boring connection', 'send data to client')
+                conn.sendall(data)
+                print_with_prefix('boring connection', 'sent {0:d} bytes to client'.format(len(data)))
+
+        print_with_prefix('boring connection', 'closed')

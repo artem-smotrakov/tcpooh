@@ -8,8 +8,7 @@ import sys
 # TODO: add an option to specify an interval of data to fuzz
 # TODO: add an option to specify a log file of an application which is being fuzzed
 #       (for example, the fuzzer can detect ASan reports, and save test number and fuzzed data)
-# TODO: dump client/server data to separate files for last connection
-# TODO: load dumped data from file to be able to reproduce test without running original client/server
+# TODO: add a boring client
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--local_host',  help='local host name', default='localhost')
@@ -23,21 +22,14 @@ parser.add_argument('--ratio',
                     default='0.01:0.05')
 parser.add_argument('--protocol', help='TCP or UDP', choices=['tcp', 'udp'], default='tcp')
 parser.add_argument('--timeout', help='connection timeout', type=int, default=3)
-parser.add_argument('--fuzzer', help='fuzzer mode (client or server), data can be stored to a file specified by --datafile option',
-                    choices=['client', 'server'])
-parser.add_argument('--dumper', help='dumper mode (client or server), read data from file specified by --datafile option',
-                    choices=['client', 'server'])
-parser.add_argument('--datafile', help='file for storing and loading data')
+parser.add_argument('--mode', help='fuzzer mode TBD',
+                    choices=['fuzz_client', 'fuzz_server', 'client_data', 'server_data'])
+parser.add_argument('--data', help='file for storing and loading data')
 
 # create task
 task = core.Task()
 try:
     task.readargs(parser.parse_args())
-
-    if task.protocol == 'tcp':
-        server = core.Server(task)
-        server.start()
-    elif task.protocol == 'udp':
-        raise Exception('UDP is not supported yet')
+    task.run()
 finally:
     task.finalize()
