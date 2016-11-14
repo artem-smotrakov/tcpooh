@@ -123,11 +123,13 @@ class Task:
                                                 self.args['max_ratio'])
             if self.args['data']:
                 self.dumper = DataDumper(self.args['data'])
+            else:
+                self.dumper = None
 
-                if self.args['protocol'] == 'tcp':
-                    self.server = Server(self)
-                else:
-                    raise Exception('Unsupported protocol: {0:s}'.format(self.args['protocol']))
+            if self.args['protocol'] == 'tcp':
+                self.server = Server(self)
+            else:
+                raise Exception('Unsupported protocol: {0:s}'.format(self.args['protocol']))
         elif self.args['mode'] == 'client_data':
             raise Exception('Unsupported mode: {0:s}'.format(self.args['mode']))
         elif self.args['mode'] == 'server_data':
