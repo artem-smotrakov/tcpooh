@@ -22,8 +22,8 @@ parser.add_argument('--ratio',
                     default='0.01:0.05')
 parser.add_argument('--protocol', help='TCP or UDP', choices=['tcp', 'udp'], default='tcp')
 parser.add_argument('--timeout', help='connection timeout', type=int, default=3)
-parser.add_argument('--mode', help='fuzzer mode TBD',
-                    choices=['fuzz_client', 'fuzz_server', 'client_data', 'server_data'])
+parser.add_argument('--mode', help='Mode',
+                    choices=['ftp_drop_tls'])
 parser.add_argument('--data', help='file for storing and loading data')
 
 # create task

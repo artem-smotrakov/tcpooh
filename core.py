@@ -5,6 +5,7 @@ import codecs
 import random
 import socket
 import textwrap
+from enum import Enum
 
 # print out a message with prefix
 def print_with_prefix(prefix, message):
@@ -21,24 +22,54 @@ def print_with_indent(prefix, first_message, other_messages):
         for message in other_messages:
             print(wrapper.fill(message))
 
+class DataDirection(Enum):
+    FROM_CLIENT_TO_SERVER = 1
+    FROM_SERVER_TO_CLIENT = 2
+
+# base class for data handlers
+class Handler:
+
+    # should return true if it can handle data in specified direction
+    def supports(self, direction):
+        return False
+
+    # handle data
+    def handle(self, data):
+        pass
+
+    # called in the end to let a handler know that we are done
+    def finalize(self):
+        pass
+
+class FtpDropTls(Handler):
+
+    def supports(self, direction):
+        return direction == DataDirection.FROM_CLIENT_TO_SERVER
+
+    def handle(self, data):
+        self.log('data {0}'.format(data))
+
+    def log(self, msg):
+        print_with_prefix('FtpDropTls', msg)
+
 # gathers data, and stores it to a file when close() method is called
 # it stores data in hex format
-class DataDumper:
+class DataDumper(Handler):
 
-    def __init__(self, filename):
+    def __init__(self, filename, direction):
         self.filename = filename
-        self.clear()
+        self.direction = direction
 
-    def dump(self, data):
+    def supports(self, direction):
+        return self.direction == direction
+
+    def handle(self, data):
         self.data.append(data)
-
-    def clear(self):
-        self.data = []
 
     # data is written to a file only when this method is called
     # it's better to  call it in finally block
     # to make sure that it always writes data to a file
-    def close(self):
+    def finalize(self):
         print_with_prefix('dumper', 'dump data to {0:s}'.format(self.filename))
         with open(self.filename, 'w') as file:
             for msg in self.data:
@@ -117,28 +148,22 @@ class Task:
         else:
             raise Exception('Could not parse --ratio value, too many colons')
 
-        if self.args['mode'] == 'fuzz_client' or self.args['mode'] == 'fuzz_server':
-            self.fuzzer = DumbByteArrayFuzzer(self.args['start_test'],
-                                                self.args['min_ratio'],
-                                                self.args['max_ratio'])
-            if self.args['data']:
-                self.dumper = DataDumper(self.args['data'])
-            else:
-                self.dumper = None
-
-            if self.args['protocol'] == 'tcp':
-                self.server = Server(self)
-            else:
-                raise Exception('Unsupported protocol: {0:s}'.format(self.args['protocol']))
-        elif self.args['mode'] == 'client_data':
-            raise Exception('Unsupported mode: {0:s}'.format(self.args['mode']))
-        elif self.args['mode'] == 'server_data':
-            self.server = BoringServer(self)
+        if self.args['mode'] == 'ftp_drop_tls':
+            self.handlers = [ FtpDropTls() ]
+            self.server = self.create_server()
         else:
             raise Exception('Unexpected mode {0:s}'.format(self.args['mode']))
 
-    def __getattr__(self, name):
-        return self.args[name]
+    def create_server(self):
+        return Server(self.local_host(), self.local_port(),
+                      self.remote_host(), self.remote_port(),
+                      self.timeout(), self.handlers)
+
+    def local_host(self):  return self.args['local_host']
+    def local_port(self):  return self.args['local_port']
+    def remote_host(self): return self.args['remote_host']
+    def remote_port(self): return self.args['remote_port']
+    def timeout(self):     return self.args['timeout']
 
     def run(self):
         try:
@@ -152,13 +177,8 @@ class Task:
     def fuzz_server(self):
         return self.args['mode'] == 'fuzz_server'
 
-    def clear_dumper(self):
-        if self.dumper:
-            self.dumper.clear()
-
     def finalize(self):
-        if self.dumper:
-            self.dumper.close()
+        for handler in self.handlers: handler.finalize()
 
 # dumb fuzzer for a byte array
 class DumbByteArrayFuzzer:
@@ -215,18 +235,20 @@ class DumbByteArrayFuzzer:
         return symbol in self.ignored_bytes
 
 # TCP server which redirects incoming connections to a remote server
-# it calls a fuzzer to fuzz data from client or server
+# it calls handlers to process data
 class Server:
 
     bufsize = 4096
 
-    def __init__(self, task):
-        self.local_host = task.local_host
-        self.local_port = task.local_port
-        self.remote_host = task.remote_host
-        self.remote_port = task.remote_port
-        self.timeout = task.timeout
-        self.task = task
+    def __init__(self, local_host, local_port, remote_host, remote_port, timeout, handlers = []):
+        self.local_host = local_host
+        self.local_port = local_port
+        self.remote_host = remote_host
+        self.remote_port = remote_port
+        self.timeout = timeout
+        self.handlers = []
+        if handlers != None:
+            for handler in handlers: self.handlers.append(handler)
 
     # main server loop
     def start(self):
@@ -251,7 +273,6 @@ class Server:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as remote:
             remote.settimeout(self.timeout)
             remote.connect((self.remote_host, self.remote_port))
-            self.task.clear_dumper()
             while True:
                 print_with_prefix('connection', 'receive data from client')
                 received = False
@@ -267,11 +288,7 @@ class Server:
 
                 if received:
                     print_with_prefix('connection', 'received {0:d} bytes from client'.format(len(data)))
-                    if self.task.fuzzer:
-                        data = self.task.fuzzer.fuzz(data)
-                        if self.task.dumper:
-                            self.task.dumper.dump(data)
-
+                    self.handle_data(data, DataDirection.FROM_CLIENT_TO_SERVER)
                     print_with_prefix('connection', 'send data to server')
                     remote.sendall(data)
                     print_with_prefix('connection', 'sent {0:d} bytes to server'.format(len(data)))
@@ -290,16 +307,16 @@ class Server:
 
                 if received:
                     print_with_prefix('connection', 'received {0:d} bytes from server'.format(len(data)))
-                    if self.task.fuzz_client():
-                        data = self.task.fuzzer.fuzz(data)
-                        if self.task.dumper:
-                            self.task.dumper.dump(data)
-
+                    self.handle_data(data, DataDirection.FROM_SERVER_TO_CLIENT)
                     print_with_prefix('connection', 'send data to client')
                     conn.sendall(data)
                     print_with_prefix('connection', 'sent {0:d} bytes to client'.format(len(data)))
 
         print_with_prefix('connection', 'closed')
+
+    def handle_data(self, data, direction):
+        for handler in self.handlers:
+            if handler.supports(direction): handler.handle(data)
 
 # this TCP server reads data from a file, and returns it to a client
 # it's called "boring" because it sends the same data to pure client again and again
