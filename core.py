@@ -256,17 +256,17 @@ class Server:
             server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             server.bind((self.local_host, self.local_port))
             server.listen(1)
-            print_with_prefix('server', 'listening on {0:s}:{1:d}'.format(self.local_host, self.local_port))
+            self.log('listening on {0:s}:{1:d}'.format(self.local_host, self.local_port))
             while True:
-                print_with_prefix('server', 'waiting for connection')
+                self.log('waiting for connection')
                 conn, addr = server.accept()
-                print_with_prefix('server', 'accepted connection from: {0}'.format(addr))
+                self.log('accepted connection from: {0}'.format(addr))
                 with conn:
                     conn.settimeout(self.timeout)
                     try:
                         self.handle_tcp_connection(conn)
                     except OSError as msg:
-                        print_with_prefix('server', 'error occured while handling connection: {0}'.format(msg))
+                        self.log('error occured while handling connection: {0}'.format(msg))
 
     # handle incoming connection
     def handle_tcp_connection(self, conn):
@@ -274,49 +274,52 @@ class Server:
             remote.settimeout(self.timeout)
             remote.connect((self.remote_host, self.remote_port))
             while True:
-                print_with_prefix('connection', 'receive data from client')
+                self.log('receive data from client')
                 received = False
                 try:
                     data = conn.recv(self.bufsize)
                     if not data:
-                        print_with_prefix('connection', 'no data received from client, closing')
+                        self.log('no data received from client, closing')
                         break
                     else:
                         received = True
                 except OSError as msg:
-                    print_with_prefix('connection', 'error occured while receiving data from client: {0}'.format(msg))
+                    self.log('error occured while receiving data from client: {0}'.format(msg))
 
                 if received:
-                    print_with_prefix('connection', 'received {0:d} bytes from client'.format(len(data)))
+                    self.log('received {0:d} bytes from client'.format(len(data)))
                     self.handle_data(data, DataDirection.FROM_CLIENT_TO_SERVER)
-                    print_with_prefix('connection', 'send data to server')
+                    self.log('send data to server')
                     remote.sendall(data)
-                    print_with_prefix('connection', 'sent {0:d} bytes to server'.format(len(data)))
+                    self.log('sent {0:d} bytes to server'.format(len(data)))
 
-                print_with_prefix('connection', 'receive data from server')
+                self.log('receive data from server')
                 received = False
                 try:
                     data = remote.recv(self.bufsize)
                     if not data:
-                        print_with_prefix('connection', 'no data received from server, closing')
+                        self.log('no data received from server, closing')
                         break
                     else:
                         received = True
                 except OSError as msg:
-                    print_with_prefix('connection', 'error occured while receiving data from server: {0}'.format(msg))
+                    self.log('error occured while receiving data from server: {0}'.format(msg))
 
                 if received:
-                    print_with_prefix('connection', 'received {0:d} bytes from server'.format(len(data)))
+                    self.log('received {0:d} bytes from server'.format(len(data)))
                     self.handle_data(data, DataDirection.FROM_SERVER_TO_CLIENT)
-                    print_with_prefix('connection', 'send data to client')
+                    self.log('send data to client')
                     conn.sendall(data)
-                    print_with_prefix('connection', 'sent {0:d} bytes to client'.format(len(data)))
+                    self.log('sent {0:d} bytes to client'.format(len(data)))
 
-        print_with_prefix('connection', 'closed')
+        self.log('connection closed')
 
     def handle_data(self, data, direction):
         for handler in self.handlers:
             if handler.supports(direction): handler.handle(data)
+
+    def log(self, msg):
+        print_with_prefix('Server', msg)
 
 # this TCP server reads data from a file, and returns it to a client
 # it's called "boring" because it sends the same data to pure client again and again
