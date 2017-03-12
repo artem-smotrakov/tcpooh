@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+import io
+import struct
 import binascii
 import codecs
 import random
@@ -76,6 +78,23 @@ class FtpDropAuth(Handler):
 
     def log(self, msg):
         print_with_prefix('FtpDropAuth', msg)
+
+class DumpMultiprocessing(Handler):
+
+    def supports(self, direction):
+        return True
+
+    def handle(self, data, direction):
+        result = HandlerResult(data)
+        buf = io.BytesIO()
+        buf.write(data[0:4])
+        size, = struct.unpack("!i", buf.getvalue())
+        self.log('size: {0}'.format(size))
+        self.log('data: {0}'.format(data[4:]))
+        return result
+
+    def log(self, msg):
+        print_with_prefix('DumpMultiprocessing', msg)
 
 # gathers data, and stores it to a file when close() method is called
 # it stores data in hex format
@@ -173,11 +192,17 @@ class Task:
         else:
             raise Exception('Could not parse --ratio value, too many colons')
 
-        if self.args['mode'] == 'ftp_drop_auth':
+        if self.mode() == 'ftp_drop_auth':
             self.handlers = [ FtpDropAuth() ]
-            self.server = self.create_server()
+        if self.mode() == 'dump_multiprocessing':
+            self.handlers = [ DumpMultiprocessing() ]
         else:
             raise Exception('Unexpected mode {0:s}'.format(self.args['mode']))
+
+        self.server = self.create_server()
+
+    def mode(self):
+        return self.args['mode']
 
     def create_server(self):
         return Server(self.local_host(), self.local_port(),
